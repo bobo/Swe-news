@@ -37,12 +37,15 @@
            "")
 
 
-(def p (atom (promise-t 10 TimeUnit/SECONDS)))
+(def p (atom (promise-t 20 TimeUnit/SECONDS)))
 
 (defn update [newsItem]
   (let [prom @p]
-    (reset! p (promise-t 10 TimeUnit/SECONDS))
+    (println "reseting")
+    (reset! p (promise-t 20 TimeUnit/SECONDS))
+    (println "delivering")
     (deliver prom newsItem)
+    (println (str "done, returning: " @prom))
     {:status 200
      :body (str "returned: " @prom)}))
 
@@ -70,8 +73,11 @@
 (defn store-news [req]
   (let [params (:params req)
         news (NewsItem. (params "title"),(params "url"),0,(Date.))]
+    (println "saving")
     (ds/save! news)
+    (println "updating")
     (update news)
+    (println "done")
     {:status 200
      :body (str "stored:" (params "title") (params "url"))}))
 
