@@ -3,13 +3,14 @@
         net.cgrand.moustache
         net.cgrand.enlive-html
         [ring.middleware.params]
+        [ring.adapter.jetty :only [run-jetty]]
         ring.middleware.session
         Swenews.util)
-  (:require [appengine-magic.services.datastore :as ds]
-            [appengine-magic.core :as ae]
-            [clojure.contrib.json :as json]
+  (:require [clojure.contrib.json :as json]
             [clojure.contrib.string :as s]
-            [appengine-magic.services.user :as user])
+            [ Swenews.mongo :as mongo]
+            [ Swenews.redis :as redis]
+            )
   (:import java.util.Date
            [ java.util.concurrent TimeUnit]
            [org.joda.time.format ISODateTimeFormat DateTimeFormat]
@@ -17,8 +18,6 @@
            ))
 
 
-(ds/defentity NewsItem [^:key title,url,points,submited-at])
-;(ds/defentity User [^:key user-name,,points,submited-at])
 
 (defn item-to-json [newsItem]
   (json/json-str (dissoc newsItem :submited-at)))
@@ -72,35 +71,22 @@
 
 (defn store-news [req]
   (let [params (:params req)
-        news (NewsItem. (params "title"),(params "url"),0,(Date.))]
-    (println "saving")
-    (ds/save! news)
-    (println "updating")
+        news {:title (params "title") :href (params "url"),:points 0, :submited-at (Date.)}]
+    (mongo/insert-news news)
     (update news)
-    (println "done")
     {:status 200
      :body (str "stored:" (params "title") (params "url"))}))
 
-(defn get-news []
-  (ds/query :kind NewsItem
-;            :limit 10
-            :sort [[:submited-at :dsc]]))
+(defn get-new []
+   (mongo/get-news))
 
 (defn give-point [req]
-  (let [item (first (ds/query :kind NewsItem
-                              :filter (= :title ((:params req) "title"))))
-        after (assoc  item :points (+ 1 (:points item)))
-        c  (:n (:session req)) 
-        session (assoc (:session req) :n (if c (inc c) 1))]
-    (println (str "c:" (:n session) " points: " (:points  after)))
-    (if (and (number? (:n session)) (> 5 (:n session)))
-      (do (ds/save! after)
+  (let [item ((:params req) "title")
+        session ((assoc (:session req) :n (redis/use-point (:user (:session  req)))))]
+    (if (> 5 (:n session (redis/used-points (:user session))))
           {:status 200
            :session session
-           :body (json/json-str {:count (:points after)})})  
-        {:status 200
-         :session session
-         :body (json/json-str {:count -1})})))
+           :body (json/json-str {:count (redis/give-post-points item)})}))))
 
 
 (deftemplate news-template "news.html"
@@ -122,12 +108,12 @@
       wrap-session
       ["store"]  #(store-news %1)
       ["point"]  #(give-point %1)
-      ["test"] (-> (str user/current-user) response constantly)
 ;      ["promise"] #(get-new-news %1)
       ["promise"] #(get-new-news %1)
       ["deliver"] #(update %1)
       [""] (-> ( news-template (get-news)) response constantly)))
 
 
-(ae/def-appengine-app Swenews-app #'Swenews-app-handler)
+(run-jetty #'Swenews-app-handler {:port 80
+                                  :join? false})
 
