@@ -5,7 +5,7 @@
         [ring.middleware.params]
         [ring.adapter.jetty :only [run-jetty]]
         ring.middleware.session
-        Swenews.util)
+        )
   (:require [clojure.contrib.json :as json]
             [clojure.contrib.string :as s]
             [ Swenews.mongo :as mongo]
@@ -36,12 +36,12 @@
            "")
 
 
-(def p (atom (promise-t 20 TimeUnit/SECONDS)))
+(def p (atom (promise)))
 
 (defn update [newsItem]
   (let [prom @p]
     (println "reseting")
-    (reset! p (promise-t 20 TimeUnit/SECONDS))
+    (reset! p (promise))
     (println "delivering")
     (deliver prom newsItem)
     (println (str "done, returning: " @prom))
@@ -77,7 +77,7 @@
     {:status 200
      :body (str "stored:" (params "title") (params "url"))}))
 
-(defn get-new []
+(defn get-news []
    (mongo/get-news))
 
 (defn give-point [req]
@@ -86,7 +86,7 @@
     (if (> 5 (:n session (redis/used-points (:user session))))
           {:status 200
            :session session
-           :body (json/json-str {:count (redis/give-post-points item)})}))))
+           :body (json/json-str {:count (redis/give-post-points item)})})))
 
 
 (deftemplate news-template "news.html"
